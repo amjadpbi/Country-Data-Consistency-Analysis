@@ -1,0 +1,72 @@
+/// Folder containing the source data files for the Country Match query.
+expression pFolderPath = "C:\CountryConfidence\Synthetic Data" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 285dcd98-cabb-435c-8023-d834702c4a53
+
+	annotation PBI_ResultType = Text
+
+/// Discovers visible XLSX and CSV files under pFolderPath, validates source mappings, and returns standardized raw country rows with source-file provenance.
+expression qCountrySourceRows =
+		let
+			ColumnAliases = [ID = {"ID", "NDC9"}, EXG = {"EXG", "Exiger"}, FAD = {"FAD", "FDA New"}, PUS = {"PUS", "USP"}],
+			NormalizeHeader = (value as any) as text => if value = null then "" else Text.Upper(Text.Trim(Text.From(value))),
+			PrepareHeaders = (raw as table, fileContext as text) as table =>
+				let
+					RowCount = Table.RowCount(raw),
+					HeaderValues = if RowCount = 0 then {} else List.Transform(Record.FieldValues(raw{0}), NormalizeHeader),
+					HeaderIssue = if RowCount = 0 then "no header row" else if List.Contains(HeaderValues, "") then "blank column header" else if List.Count(HeaderValues) <> List.Count(List.Distinct(HeaderValues)) then "duplicate column headers" else "",
+					Promoted = if HeaderIssue <> "" then error Error.Record("InvalidHeaders", fileContext & ": " & HeaderIssue, [File = fileContext, Reason = HeaderIssue]) else Table.PromoteHeaders(raw, [PromoteAllScalars = true])
+				in
+					Promoted,
+			ResolveColumns = (promoted as table, fileContext as text) as record =>
+					let
+						ColumnNames = Table.ColumnNames(promoted),
+						FindMatches = (aliases as list) as list => List.Select(ColumnNames, each List.Contains(List.Transform(aliases, NormalizeHeader), NormalizeHeader(_))),
+						IDMatches = FindMatches(ColumnAliases[ID]),
+						EXGMatches = FindMatches(ColumnAliases[EXG]),
+						FADMatches = FindMatches(ColumnAliases[FAD]),
+						PUSMatches = FindMatches(ColumnAliases[PUS]),
+						Missing = List.RemoveNulls({if List.IsEmpty(IDMatches) then "ID" else null, if List.IsEmpty(EXGMatches) then "EXG" else null, if List.IsEmpty(FADMatches) then "FAD" else null, if List.IsEmpty(PUSMatches) then "PUS" else null}),
+						Ambiguous = List.RemoveNulls({if List.Count(IDMatches) > 1 then "ID <- " & Text.Combine(IDMatches, ", ") else null, if List.Count(EXGMatches) > 1 then "EXG <- " & Text.Combine(EXGMatches, ", ") else null, if List.Count(FADMatches) > 1 then "FAD <- " & Text.Combine(FADMatches, ", ") else null, if List.Count(PUSMatches) > 1 then "PUS <- " & Text.Combine(PUSMatches, ", ") else null}),
+						Mapping = if not List.IsEmpty(Missing) or not List.IsEmpty(Ambiguous) then error Error.Record("InvalidSchema", fileContext & ": missing logical fields [" & Text.Combine(Missing, ", ") & "]; ambiguous mappings [" & Text.Combine(Ambiguous, "; ") & "]", [File = fileContext, Missing = Missing, Ambiguous = Ambiguous]) else [ID = IDMatches{0}, EXG = EXGMatches{0}, FAD = FADMatches{0}, PUS = PUSMatches{0}]
+					in
+						Mapping,
+			StandardizeTable = (raw as table, filePath as text) as table =>
+					let
+						Promoted = PrepareHeaders(raw, filePath),
+						Mapping = ResolveColumns(Promoted, filePath),
+						Selected = Table.FromColumns({Table.Column(Promoted, Mapping[ID]), Table.Column(Promoted, Mapping[EXG]), Table.Column(Promoted, Mapping[FAD]), Table.Column(Promoted, Mapping[PUS])}, {"ID", "EXG", "FAD", "PUS"}),
+						TypedAttempt = try Table.TransformColumnTypes(Selected, {{"ID", Int64.Type}, {"EXG", type text}, {"FAD", type text}, {"PUS", type text}}),
+						Typed = if TypedAttempt[HasError] then error Error.Record("InvalidData", filePath & ": required values could not be converted to ID/text types: " & Record.FieldOrDefault(TypedAttempt[Error], "Message", "type conversion failed"), [File = filePath, Reason = Record.FieldOrDefault(TypedAttempt[Error], "Message", "type conversion failed")]) else TypedAttempt[Value],
+						MissingIDs = Table.RowCount(Table.SelectRows(Typed, each [ID] = null)),
+						Checked = if Table.RowCount(Typed) = 0 then error Error.Record("EmptyData", filePath & ": no data rows were found", [File = filePath]) else if MissingIDs > 0 then error Error.Record("InvalidData", filePath & ": " & Text.From(MissingIDs) & " data row(s) have a blank ID", [File = filePath, BlankIDRows = MissingIDs]) else Typed,
+						WithSource = Table.AddColumn(Checked, "Source File", each filePath, type text)
+					in
+						Table.Buffer(WithSource),
+			ParseExcel = (content as binary, filePath as text) as table =>
+					let
+						Workbook = Excel.Workbook(content, null, true),
+						VisibleSheets = Table.SelectRows(Workbook, each [Kind] = "Sheet" and Record.FieldOrDefault(_, "Hidden", false) <> true),
+						ProbedSheets = Table.AddColumn(VisibleSheets, "HeaderProbe", each try ResolveColumns(PrepareHeaders([Data], filePath & " [sheet " & Text.From([Item]) & "]"), filePath & " [sheet " & Text.From([Item]) & "]"), type record),
+						ValidSheets = Table.SelectRows(ProbedSheets, each [HeaderProbe][HasError] = false),
+						SheetNames = Text.Combine(List.Transform(VisibleSheets[Item], each Text.From(_)), ", "),
+						CandidateNames = List.Transform(Table.ToRecords(ValidSheets), each Text.From(_[Item])),
+						Result = if Table.RowCount(ValidSheets) = 0 then error Error.Record("NoMatchingWorksheet", filePath & ": no visible worksheet matched required logical fields ID, EXG, FAD, and PUS. Sheets checked: " & SheetNames, [File = filePath, Sheets = SheetNames]) else if Table.RowCount(ValidSheets) > 1 then error Error.Record("AmbiguousWorksheet", filePath & ": multiple worksheets match required logical fields: " & Text.Combine(CandidateNames, ", "), [File = filePath, Sheets = CandidateNames]) else StandardizeTable(ValidSheets{0}[Data], filePath & " [sheet " & Text.From(ValidSheets{0}[Item]) & "]")
+					in
+						Result,
+			ParseFile = (content as binary, extension as text, folderPath as text, fileName as text) as table =>
+					let
+						filePath = folderPath & fileName,
+						Attempt = try if extension = ".csv" then StandardizeTable(Csv.Document(content, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]), filePath) else ParseExcel(content, filePath),
+						Result = if Attempt[HasError] then error Error.Record("SourceFileError", "File '" & filePath & "' failed validation: " & Record.FieldOrDefault(Attempt[Error], "Message", "unknown error"), [File = filePath, Reason = Record.FieldOrDefault(Attempt[Error], "Message", "unknown error")]) else Attempt[Value]
+					in
+						Result,
+			AllFiles = Folder.Files(pFolderPath),
+			EligibleFiles = Table.SelectRows(AllFiles, each List.Contains({".csv", ".xlsx"}, Text.Lower([Extension])) and not Text.StartsWith([Name], "~$") and Record.FieldOrDefault([Attributes], "Hidden", false) <> true),
+			FileAttempts = Table.Buffer(Table.AddColumn(EligibleFiles, "Parse", each try ParseFile([Content], Text.Lower([Extension]), [Folder Path], [Name]), type record)),
+			FailedFiles = Table.SelectRows(FileAttempts, each [Parse][HasError]),
+			FailureMessages = List.Transform(Table.ToRecords(FailedFiles), (file) => file[Folder Path] & file[Name] & ": " & Record.FieldOrDefault(file[Parse][Error], "Message", "unknown error")),
+			ParsedTables = List.Transform(Table.ToRecords(FileAttempts), each _[Parse][Value]),
+			Result = if Table.RowCount(EligibleFiles) = 0 then error Error.Record("NoInputFiles", "No visible .csv or .xlsx files were found under " & pFolderPath, [Folder = pFolderPath]) else if Table.RowCount(FailedFiles) > 0 then error Error.Record("FolderIngestionFailed", Text.Combine(FailureMessages, " | "), [Folder = pFolderPath, Files = FailureMessages]) else Table.Combine(ParsedTables)
+		in
+			Result
+	lineageTag: d80c31d2-4044-42d8-892b-e45dbe728f8f

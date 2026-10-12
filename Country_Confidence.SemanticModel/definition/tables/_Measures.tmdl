@@ -1,0 +1,46 @@
+table _Measures
+	lineageTag: 339b7d7c-c1d6-45da-af12-ef5aa923f96a
+
+	measure 'High %' = DIVIDE ( [High Confidence], [Total Records] )
+		formatString: 0.0%;
+		lineageTag: 5ef3c9ef-b3e4-4a05-8054-7a885250ab52
+
+	measure 'High Confidence' = CALCULATE ( COUNTROWS ( 'Country Match' ), 'Country Match'[Confidence Level] = "High" )
+		formatString: #,##0
+		lineageTag: 5f82d50d-34db-4ee7-bcc0-34ad1dbd2f51
+
+	measure 'Low %' = DIVIDE ( [Low Confidence], [Total Records] )
+		formatString: 0.0%;
+		lineageTag: fcb36f29-93f0-4f4d-a64b-2f31d0aaf1da
+
+	measure 'Low Confidence' = CALCULATE ( COUNTROWS ( 'Country Match' ), 'Country Match'[Confidence Level] = "Low" )
+		formatString: #,##0
+		lineageTag: 48a0a64f-e0e4-4cc0-b6b7-4d04c39f3d06
+
+	measure 'Medium %' = DIVIDE ( [Medium Confidence], [Total Records] )
+		formatString: 0.0%;
+		lineageTag: a02ffdc8-4c3b-44d5-88e5-d01fef6e5d72
+
+	measure 'Medium Confidence' = CALCULATE ( COUNTROWS ( 'Country Match' ), 'Country Match'[Confidence Level] = "Medium" )
+		formatString: #,##0
+		lineageTag: 0f8d4a7b-8a4d-4a2b-bd48-fc8ec6b92b79
+
+	measure 'Total Records' = COUNTROWS ( 'Country Match' )
+		formatString: #,##0
+		lineageTag: 1c3c55f8-b7c4-4a07-97d6-6ea5f8d8fa58
+
+	column Column
+		isHidden
+		formatString: 0
+		lineageTag: 1f7fb4bd-e85e-4a24-a25e-6dce41f470b8
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Column]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition _Measures = calculated
+		mode: import
+		source = ROW("Column", BLANK())
+
+	annotation PBI_Id = 186067647e2b4ddeaaf5e6dd5c7ef3c8

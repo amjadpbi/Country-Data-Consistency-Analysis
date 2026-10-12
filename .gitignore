@@ -1,0 +1,23 @@
+# Local client/source data and ad hoc test copies are retained locally only.
+/Source Data/
+/Test Data/
+
+# Local Power BI and temp files
+*.pbix
+*.tmp
+*.bak
+*.log
+*.zip
+**/~$*
+**/.pbi/
+**/.tmp_inspection/
+**/.DS_Store
+**/Thumbs.db
+
+# Local backups and export folders that should remain out of source control
+**/Backup/
+**/backups/
+**/Exports/
+**/export/
+
+# Do not ignore Synthetic Data: it is the intentional, fictional example dataset.

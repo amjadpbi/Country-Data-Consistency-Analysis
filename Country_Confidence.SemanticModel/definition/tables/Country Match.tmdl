@@ -1,0 +1,137 @@
+table 'Country Match'
+	lineageTag: 3d1b96af-6d28-4d39-bd36-44510d4c7b5d
+
+	column ID
+		dataType: int64
+		formatString: 0
+		lineageTag: 26c788b1-86f8-4dbe-859e-06fc433d9a88
+		summarizeBy: none
+		sourceColumn: ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column EXG
+		dataType: string
+		lineageTag: 61e285f6-ae24-42df-86fb-10d8782902af
+		summarizeBy: none
+		sourceColumn: EXG
+
+		annotation SummarizationSetBy = Automatic
+
+	column FAD
+		dataType: string
+		lineageTag: 0d020047-f7d6-4cde-9c27-c9e8d7d5a931
+		summarizeBy: none
+		sourceColumn: FAD
+
+		annotation SummarizationSetBy = Automatic
+
+	column PUS
+		dataType: string
+		lineageTag: 10d0c980-fc3a-4305-8fd4-c86e7bf071b8
+		summarizeBy: none
+		sourceColumn: PUS
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Confidence Level'
+		dataType: string
+		lineageTag: e958c24a-603e-49cd-b6d3-0f17b73dfd01
+		summarizeBy: none
+		sourceColumn: Confidence Level
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Matching Countries'
+		dataType: string
+		lineageTag: 5df32630-dd7d-4d96-9d73-0f50e07f3999
+		summarizeBy: none
+		sourceColumn: Matching Countries
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Match Details'
+		dataType: string
+		lineageTag: 54c6d71c-9c5c-4bdb-8a85-278fb3583d0c
+		summarizeBy: none
+		sourceColumn: Match Details
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Match Status' =
+
+			IF (
+			    LEN ( TRIM ( 'Country Match'[Matching Countries] & "" ) ) > 0,
+			    "Has Match",
+			    "No Match"
+			)
+		lineageTag: 14a0c7e7-b021-4ec7-a2f6-6ecaf1573929
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Country Match' = m
+		mode: import
+		source =
+				let
+					SourceRows = qCountrySourceRows,
+					ExactRecords = Table.Distinct(Table.SelectColumns(SourceRows, {"ID", "EXG", "FAD", "PUS"})),
+					TypeColumns = Table.TransformColumnTypes(ExactRecords, {{"ID", Int64.Type}, {"EXG", type text}, {"FAD", type text}, {"PUS", type text}}),
+					NormalizeTokens = (value as any) as list =>
+						let
+							rawText = if value = null then "" else Text.From(value),
+							upperText = Text.Trim(Text.Upper(rawText)),
+							protectedText = Text.Replace(upperText, "N/A", "__MISSING_VALUE_NA__"),
+							parts = List.Transform(Text.SplitAny(protectedText, ",;/|"), each Text.Trim(_)),
+							validParts = List.Select(parts, each _ <> "" and not List.Contains({"UNKNOWN", "N/A", "NA", "NULL", "NONE", "__MISSING_VALUE_NA__"}, _))
+						in
+							List.Distinct(validParts),
+					AddExgTokens = Table.AddColumn(TypeColumns, "EXG Tokens", each NormalizeTokens([EXG]), type { text }),
+					AddFadTokens = Table.AddColumn(AddExgTokens, "FAD Tokens", each NormalizeTokens([FAD]), type { text }),
+					AddPusTokens = Table.AddColumn(AddFadTokens, "PUS Tokens", each NormalizeTokens([PUS]), type { text }),
+					AddConfidence = Table.AddColumn(AddPusTokens, "Confidence Level", each
+						let
+							exg = [EXG Tokens],
+							fad = [FAD Tokens],
+							pus = [PUS Tokens],
+							allMatch = List.Distinct(List.Intersect({exg, fad, pus})),
+							pairMatch = List.Distinct(List.Combine({List.Intersect({exg, fad}), List.Intersect({exg, pus}), List.Intersect({fad, pus})})),
+							result = if List.Count(allMatch) > 0 then "High" else if List.Count(pairMatch) > 0 then "Medium" else "Low"
+						in
+							result, type text),
+					AddMatchingCountries = Table.AddColumn(AddConfidence, "Matching Countries", each
+						let
+							exg = [EXG Tokens],
+							fad = [FAD Tokens],
+							pus = [PUS Tokens],
+							allMatch = List.Distinct(List.Intersect({exg, fad, pus})),
+							pairMatch = List.Distinct(List.Combine({List.Intersect({exg, fad}), List.Intersect({exg, pus}), List.Intersect({fad, pus})})),
+							result = if List.Count(allMatch) > 0 then Text.Combine(allMatch, ", ") else if List.Count(pairMatch) > 0 then Text.Combine(pairMatch, ", ") else ""
+						in
+							result, type text),
+					AddMatchDetails = Table.AddColumn(AddMatchingCountries, "Match Details", each
+						let
+							exg = [EXG Tokens],
+							fad = [FAD Tokens],
+							pus = [PUS Tokens],
+							allMatch = List.Distinct(List.Intersect({exg, fad, pus})),
+							exgFad = List.Distinct(List.Intersect({exg, fad})),
+							exgPus = List.Distinct(List.Intersect({exg, pus})),
+							fadPus = List.Distinct(List.Intersect({fad, pus})),
+							details = List.RemoveNulls({
+								if List.Count(allMatch) > 0 then "EXG–FAD–PUS: " & Text.Combine(allMatch, ", ") else null,
+								if List.Count(exgFad) > 0 then "EXG–FAD: " & Text.Combine(exgFad, ", ") else null,
+								if List.Count(exgPus) > 0 then "EXG–PUS: " & Text.Combine(exgPus, ", ") else null,
+								if List.Count(fadPus) > 0 then "FAD–PUS: " & Text.Combine(fadPus, ", ") else null
+							}),
+							result = if List.Count(details) > 0 then Text.Combine(details, "; ") else "No country match across columns"
+						in
+							result, type text),
+					RemoveHelperColumns = Table.RemoveColumns(AddMatchDetails, {"EXG Tokens", "FAD Tokens", "PUS Tokens"}),
+					FinalOutput = Table.ReorderColumns(RemoveHelperColumns, {"ID", "EXG", "FAD", "PUS", "Confidence Level", "Matching Countries", "Match Details"})
+				in
+					FinalOutput
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
