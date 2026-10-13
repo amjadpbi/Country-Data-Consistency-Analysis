@@ -4,7 +4,13 @@ A Power BI reporting and data-consistency solution that standardizes country val
 
 ## Dashboard preview
 
-<!-- Upload the synthetic-data dashboard screenshot to `assets/country-data-consistency-dashboard.png`, then replace this comment with: ![Country Data Consistency Analysis dashboard](assets/country-data-consistency-dashboard.png) -->
+*Dashboard screenshot will be added here.*
+
+To display the screenshot, upload it to `assets/country-data-consistency-dashboard.png`, then replace the placeholder sentence above with:
+
+```markdown
+![Country Data Consistency Analysis dashboard](assets/country-data-consistency-dashboard.png)
+```
 
 ## Business problem and solution
 
