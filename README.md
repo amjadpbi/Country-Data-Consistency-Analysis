@@ -65,9 +65,9 @@ See `Synthetic Data/generate_synthetic_country_data.py` and `Documentation/Testi
 3. Apply the parameter change and refresh.
 4. Confirm the model has 18 records with the classification counts above.
 
-The project’s checked-in parameter default is a neutral example path. Change it to the actual full path on your computer after cloning; do not commit a local machine path.
+The project’s checked-in parameter value is an example placeholder. Change it to the actual full path on your computer after cloning; do not commit a personal machine path.
 
-Power BI Desktop was not available during this preparation pass, so a live Desktop refresh and visual rendering check remain unverified. The expected results above were independently recalculated from the synthetic inputs and Power Query/DAX logic.
+The project author has confirmed that the Power BI project works in the submitted workflow and that the Upwork milestone was approved. The synthetic expected counts were also independently recalculated from the inputs and Power Query/DAX logic. This repository review did not independently reproduce the author’s Power BI Desktop session; that limitation should not be interpreted as evidence of a project defect.
 
 ## Agentic AI-assisted development
 
@@ -81,6 +81,6 @@ Only the synthetic sample is intended for publication. The local source and lega
 
 - This project measures agreement among three fields, not factual country accuracy.
 - Conflicting rows with the same ID are retained and surfaced separately; a business-approved ID conflict policy would be needed for automated resolution.
-- The query validates schemas during refresh, but Power BI Desktop refresh behavior should be verified on the target machine.
+- The project author reports successful operation in their Power BI workflow. Reproduce refresh and visual checks on your own machine when adapting the project or changing its inputs.
 - The model discovers files during refresh; it does not implement persistent incremental processing.
 - No license has been selected; do not add a license until the intended terms are approved.
