@@ -2,7 +2,9 @@
 
 A Power BI reporting and data-consistency solution that standardizes country values across three fields, identifies exact and pairwise matches, and classifies records by confidence level using dynamic Excel and CSV folder ingestion.
 
-<!-- Add verified synthetic-data dashboard screenshot here -->
+## Dashboard preview
+
+<!-- Upload the synthetic-data dashboard screenshot to `assets/country-data-consistency-dashboard.png`, then replace this comment with: ![Country Data Consistency Analysis dashboard](assets/country-data-consistency-dashboard.png) -->
 
 ## Business problem and solution
 
