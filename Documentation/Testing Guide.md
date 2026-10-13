@@ -87,8 +87,8 @@ For separate refresh trials, use a temporary test folder containing only the des
 
 Each eligible CSV/XLSX is expected to contain exactly one unambiguous mapping for each required logical field. Missing fields, multiple alias matches, malformed rows, or Excel workbooks with zero or multiple qualifying visible worksheets should fail with a file-specific diagnostic. Do not leave an invalid file in the default synthetic folder during a normal refresh, because a validation failure in any eligible file fails the combined query.
 
-## Validation actually completed
+## Validation status
 
-The synthetic CSV and Excel files were read locally and their counts/classifications independently recomputed. Actual results: 23 raw rows, 18 distinct `(ID, EXG, FAD, PUS)` tuples, High 4, Medium 9, Low 5. The count for ID `3001` is one after exact duplicate removal; ID `3002` retains two differing rows.
+The project author reports that the Power BI project works in the submitted workflow and that the Upwork milestone was approved. The synthetic CSV and Excel files were also read and their counts/classifications independently recomputed: 23 raw rows, 18 distinct `(ID, EXG, FAD, PUS)` tuples, High 4, Medium 9, Low 5. ID `3001` appears once after exact duplicate removal; ID `3002` retains two differing rows.
 
-No Power BI Desktop or local Analysis Services instance was available for this pass. Therefore a live model refresh, actual Power Query error display, and dashboard visual rendering have **not** been verified here. Complete those checks in Power BI Desktop before treating the workflow as fully validated.
+This repository review did not independently reproduce the author’s Power BI Desktop session or separately execute every edge-case test listed above. Treat those as documented test procedures unless you run and record them. The reviewer’s lack of a local Desktop session is a limit of this review, not evidence that the submitted project is broken.
